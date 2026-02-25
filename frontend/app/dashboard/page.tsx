@@ -9,36 +9,47 @@ import { scoreAPI, scanAPI, prsAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Scan, GitPullRequest, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import {
+  Shield, Scan, GitPullRequest,
+  AlertTriangle, CheckCircle, Clock, TrendingUp
+} from "lucide-react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
+} from "recharts";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [score, setScore] = useState<number | null>(null);
+  const [scoreHistory, setScoreHistory] = useState<any[]>([]);
   const [scans, setScans] = useState<any[]>([]);
   const [prs, setPRs] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    }
+    if (!loading && !user) router.push("/login");
   }, [user, loading]);
 
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
+    if (user) loadData();
   }, [user]);
 
   const loadData = async () => {
     try {
-      const [scoreRes, scansRes, prsRes] = await Promise.all([
+      const [scoreRes, scoreHistRes, scansRes, prsRes] = await Promise.all([
         scoreAPI.getLatest(),
+        scoreAPI.getHistory(),
         scanAPI.history(),
         prsAPI.getAll(),
       ]);
       setScore(scoreRes.data.score ?? 100);
+      setScoreHistory(
+        scoreHistRes.data.slice(0, 10).reverse().map((s: any) => ({
+          date: new Date(s.calculated_at).toLocaleDateString(),
+          score: s.score,
+        }))
+      );
       setScans(scansRes.data.slice(0, 5));
       setPRs(prsRes.data.slice(0, 5));
     } catch (err) {
@@ -52,6 +63,12 @@ export default function DashboardPage() {
     if (s >= 80) return "text-green-400";
     if (s >= 50) return "text-yellow-400";
     return "text-red-400";
+  };
+
+  const getScoreLabel = (s: number) => {
+    if (s >= 80) return "Good";
+    if (s >= 50) return "Fair";
+    return "Poor";
   };
 
   const getStatusBadge = (status: string) => {
@@ -83,14 +100,19 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Score + Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-slate-900 border-slate-800 p-6 flex flex-col items-center justify-center md:col-span-1">
+        {/* Top Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card className="bg-slate-900 border-slate-800 p-6 flex flex-col items-center justify-center">
             <Shield className="h-8 w-8 text-blue-400 mb-2" />
             <div className={`text-5xl font-bold ${getScoreColor(score ?? 100)}`}>
               {dataLoading ? "..." : score ?? 100}
             </div>
             <div className="text-slate-400 text-sm mt-1">Security Score</div>
+            {!dataLoading && (
+              <div className={`text-xs mt-1 font-medium ${getScoreColor(score ?? 100)}`}>
+                {getScoreLabel(score ?? 100)}
+              </div>
+            )}
           </Card>
 
           <Card className="bg-slate-900 border-slate-800 p-6">
@@ -120,7 +142,36 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Recent Scans */}
+        {/* Score History Chart */}
+        {scoreHistory.length > 1 && (
+          <Card className="bg-slate-900 border-slate-800 p-6 mb-6">
+            <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-slate-400" />
+              Security Score History
+            </h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={scoreHistory}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px" }}
+                  labelStyle={{ color: "#94a3b8" }}
+                  itemStyle={{ color: "#60a5fa" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#60a5fa"
+                  strokeWidth={2}
+                  dot={{ fill: "#60a5fa", r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        )}
+
+        {/* Recent Scans + PRs */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="bg-slate-900 border-slate-800 p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
@@ -156,7 +207,6 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          {/* Recent PRs */}
           <Card className="bg-slate-900 border-slate-800 p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <GitPullRequest className="h-5 w-5 text-slate-400" />
