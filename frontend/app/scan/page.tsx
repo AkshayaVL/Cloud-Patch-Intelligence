@@ -1,50 +1,56 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
-  Scan, CheckCircle, AlertTriangle, Loader2,
-  Shield, GitPullRequest, Zap, ChevronRight
+  Shield, Github, Zap, CheckCircle, Circle,
+  Loader2, Terminal, ArrowRight, ExternalLink,
+  AlertTriangle, Trophy, ChevronRight
 } from "lucide-react";
+import confetti from "canvas-confetti";
 
-const STEPS = [
-  { key: "connecting", label: "Connecting to AWS" },
-  { key: "scanning", label: "Scanning Resources" },
-  { key: "analyzing", label: "Analyzing with AI" },
-  { key: "patching", label: "Generating Patches" },
-  { key: "pr_creation", label: "Opening GitHub PRs" },
-  { key: "scoring", label: "Calculating Score" },
-  { key: "completed", label: "Completed" },
+const steps = [
+  { id: "connecting", label: "Connecting to AWS", icon: Shield },
+  { id: "scanning", label: "Scanning Resources", icon: Zap },
+  { id: "analyzing", label: "Analyzing with AI", icon: Zap },
+  { id: "patching", label: "Generating Patches", icon: Terminal },
+  { id: "pr_creation", label: "Opening GitHub PRs", icon: Github },
+  { id: "scoring", label: "Calculating Score", icon: Trophy },
+  { id: "completed", label: "Completed", icon: CheckCircle },
 ];
 
+const severityColors: any = {
+  CRITICAL: "bg-red-100 text-red-700 border-red-200",
+  HIGH: "bg-orange-100 text-orange-700 border-orange-200",
+  MEDIUM: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  LOW: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
 export default function ScanPage() {
-  const { user, token, loading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
-  const [awsKeyId, setAwsKeyId] = useState("");
+  const [awsKey, setAwsKey] = useState("");
   const [awsSecret, setAwsSecret] = useState("");
   const [awsRegion, setAwsRegion] = useState("us-east-1");
   const [githubToken, setGithubToken] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
 
   const [scanning, setScanning] = useState(false);
-  const [currentStep, setCurrentStep] = useState("");
-  const [progress, setProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [logs, setLogs] = useState<string[]>([]);
-  const [scanComplete, setScanComplete] = useState(false);
-  const [scanResult, setScanResult] = useState<any>(null);
   const [error, setError] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [progress, setProgress] = useState(0);
 
-  const wsRef = useRef<WebSocket | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -54,36 +60,36 @@ export default function ScanPage() {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  const getStepIndex = (step: string) => {
-    return STEPS.findIndex((s) => s.key === step);
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `[${time}] ${msg}`]);
   };
 
-  const addLog = (message: string) => {
-    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
-  };
+  const getStepIndex = (stepId: string) => steps.findIndex(s => s.id === stepId);
 
-  const startScan = () => {
-    if (!awsKeyId || !awsSecret || !githubToken || !githubRepo) {
-      setError("Please fill in all fields before scanning.");
+  const handleScan = async () => {
+    if (!awsKey || !awsSecret || !githubToken || !githubRepo) {
+      setError("Please fill in all required fields.");
       return;
     }
-
     setError("");
     setScanning(true);
-    setScanComplete(false);
     setLogs([]);
+    setResult(null);
+    setCurrentStep(0);
+    setCompletedSteps(new Set());
     setProgress(0);
-    setCurrentStep("connecting");
 
-    const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-    const ws = new WebSocket(`${WS_URL}/ws/scan`);
+    const token = localStorage.getItem("cpi_token");
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+    const ws = new WebSocket(`${wsUrl}/ws/scan`);
     wsRef.current = ws;
 
     ws.onopen = () => {
       addLog("WebSocket connected. Starting scan...");
       ws.send(JSON.stringify({
         token,
-        aws_access_key_id: awsKeyId,
+        aws_access_key_id: awsKey,
         aws_secret_access_key: awsSecret,
         aws_region: awsRegion,
         github_token: githubToken,
@@ -93,261 +99,301 @@ export default function ScanPage() {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      const { step, message, data: eventData } = data;
+      const stepIdx = getStepIndex(data.step);
 
-      setCurrentStep(step);
-      addLog(message);
-
-      const stepIdx = getStepIndex(step);
-      if (stepIdx >= 0) {
-        setProgress(Math.round(((stepIdx + 1) / STEPS.length) * 100));
+      if (data.step === "error") {
+        setError(data.message);
+        setScanning(false);
+        addLog(`Error: ${data.message}`);
+        return;
       }
 
-      if (step === "completed") {
-        setScanComplete(true);
-        setScanResult(eventData);
-        setScanning(false);
+      if (data.step === "completed") {
+        setCurrentStep(steps.length - 1);
+        setCompletedSteps(new Set(steps.map((_, i) => i)));
         setProgress(100);
+        setResult(data.data);
+        setScanning(false);
+        addLog("Scan completed successfully");
+
+        // Confetti!
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ["#6366f1", "#8b5cf6", "#06b6d4", "#22c55e"],
+        });
+        return;
       }
 
-      if (step === "error") {
-        setError(message);
-        setScanning(false);
+      if (stepIdx >= 0) {
+        setCurrentStep(stepIdx);
+        setCompletedSteps(prev => {
+          const next = new Set(prev);
+          for (let i = 0; i < stepIdx; i++) next.add(i);
+          return next;
+        });
+        setProgress(Math.round((stepIdx / (steps.length - 1)) * 95));
       }
+
+      addLog(data.message || `Step: ${data.step}`);
     };
 
     ws.onerror = () => {
-      setError("WebSocket connection failed. Make sure the backend is running.");
+      setError("WebSocket connection failed. Please check backend is running.");
       setScanning(false);
     };
 
     ws.onclose = () => {
-      if (!scanComplete) {
-        setScanning(false);
-      }
+      if (scanning) setScanning(false);
     };
-  };
-
-  const stopScan = () => {
-    wsRef.current?.close();
-    setScanning(false);
-    addLog("Scan cancelled by user.");
   };
 
   if (loading || !user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Run Security Scan</h1>
-          <p className="text-slate-400 mt-1">
-            Connect your AWS account and GitHub repo to start the autonomous scan.
-          </p>
-        </div>
+      <main className="max-w-6xl mx-auto px-6 py-8">
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <h1 className="text-2xl font-display font-bold text-slate-900 mb-1">Run Security Scan</h1>
+          <p className="text-slate-500 text-sm mb-8">Connect your AWS account and GitHub repo to start the autonomous scan.</p>
+        </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left — Credentials */}
-          <div className="space-y-4">
-            <Card className="bg-slate-900 border-slate-800 p-6">
-              <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                <Shield className="h-5 w-5 text-orange-400" />
-                AWS Credentials
-              </h2>
-              <div className="space-y-3">
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
+                  <Shield className="h-4 w-4 text-orange-600" />
+                </div>
+                <h2 className="font-display font-bold text-slate-900">AWS Credentials</h2>
+              </div>
+              <div className="space-y-4">
                 <div>
-                  <Label className="text-slate-300 text-sm">Access Key ID</Label>
-                  <Input
-                    value={awsKeyId}
-                    onChange={(e) => setAwsKeyId(e.target.value)}
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Access Key ID <span className="text-red-400">*</span></Label>
+                  <Input value={awsKey} onChange={e => setAwsKey(e.target.value)}
                     placeholder="AKIAIOSFODNN7EXAMPLE"
-                    disabled={scanning}
-                    className="mt-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 text-sm"
-                  />
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-slate-300 text-sm">Secret Access Key</Label>
-                  <Input
-                    type="password"
-                    value={awsSecret}
-                    onChange={(e) => setAwsSecret(e.target.value)}
-                    placeholder="••••••••••••••••"
-                    disabled={scanning}
-                    className="mt-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 text-sm"
-                  />
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Secret Access Key <span className="text-red-400">*</span></Label>
+                  <Input type="password" value={awsSecret} onChange={e => setAwsSecret(e.target.value)}
+                    placeholder="••••••••••••••••••••••••"
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-slate-300 text-sm">Region</Label>
-                  <Input
-                    value={awsRegion}
-                    onChange={(e) => setAwsRegion(e.target.value)}
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Region</Label>
+                  <Input value={awsRegion} onChange={e => setAwsRegion(e.target.value)}
                     placeholder="us-east-1"
-                    disabled={scanning}
-                    className="mt-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 text-sm"
-                  />
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <Card className="bg-slate-900 border-slate-800 p-6">
-              <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                <GitPullRequest className="h-5 w-5 text-white" />
-                GitHub
-              </h2>
-              <div className="space-y-3">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+                  <Github className="h-4 w-4 text-white" />
+                </div>
+                <h2 className="font-display font-bold text-slate-900">GitHub Connection</h2>
+              </div>
+              <div className="space-y-4">
                 <div>
-                  <Label className="text-slate-300 text-sm">Personal Access Token</Label>
-                  <Input
-                    type="password"
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
-                    placeholder="ghp_xxxxxxxxxxxx"
-                    disabled={scanning}
-                    className="mt-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 text-sm"
-                  />
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Personal Access Token <span className="text-red-400">*</span></Label>
+                  <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-slate-300 text-sm">Repository</Label>
-                  <Input
-                    value={githubRepo}
-                    onChange={(e) => setGithubRepo(e.target.value)}
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Repository <span className="text-red-400">*</span></Label>
+                  <Input value={githubRepo} onChange={e => setGithubRepo(e.target.value)}
                     placeholder="username/repo-name"
-                    disabled={scanning}
-                    className="mt-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 text-sm"
-                  />
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
                 </div>
               </div>
-            </Card>
+            </div>
 
             {error && (
-              <div className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg px-4 py-3">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-4 flex items-center gap-2"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
                 {error}
-              </div>
+              </motion.div>
             )}
 
-            {!scanning ? (
-              <Button
-                onClick={startScan}
-                className="w-full bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
-                size="lg"
-              >
-                <Scan className="h-5 w-5" />
-                Start Autonomous Scan
-              </Button>
-            ) : (
-              <Button
-                onClick={stopScan}
-                variant="outline"
-                className="w-full border-red-700 text-red-400 hover:bg-red-950"
-                size="lg"
-              >
-                Cancel Scan
-              </Button>
-            )}
-          </div>
+            <button onClick={handleScan} disabled={scanning}
+              className="btn-premium w-full text-white font-semibold h-12 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+            >
+              {scanning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Scanning in progress...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4" />
+                  Start Autonomous Scan
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </motion.div>
 
           {/* Right — Progress */}
-          <div className="space-y-4">
-            <Card className="bg-slate-900 border-slate-800 p-6">
-              <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                <Zap className="h-5 w-5 text-yellow-400" />
-                Agent Progress
-              </h2>
-
-              {/* Progress Bar */}
-              <div className="mb-6">
-                <div className="flex justify-between text-sm text-slate-400 mb-2">
-                  <span>{scanning ? "Scanning..." : scanComplete ? "Complete!" : "Ready"}</span>
-                  <span>{progress}%</span>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+            {/* Progress Steps */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5">
+              <div className="flex justify-between items-center mb-5">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-indigo-500" />
+                  <h2 className="font-display font-bold text-slate-900">Agent Progress</h2>
                 </div>
-                <Progress value={progress} className="h-2" />
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 text-xs">{progress}%</span>
+                  {scanning && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-1.5 bg-slate-100 rounded-full mb-6 overflow-hidden">
+                <motion.div
+                  className="h-full bg-indigo-gradient rounded-full"
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.5 }}
+                />
               </div>
 
               {/* Steps */}
-              <div className="space-y-2">
-                {STEPS.map((step, idx) => {
-                  const currentIdx = getStepIndex(currentStep);
-                  const isDone = currentIdx > idx || scanComplete;
-                  const isActive = currentStep === step.key && scanning;
+              <div className="space-y-1">
+                {steps.map((step, i) => {
+                  const Icon = step.icon;
+                  const isDone = completedSteps.has(i);
+                  const isActive = currentStep === i && scanning;
+                  const isPending = !isDone && !isActive;
 
                   return (
-                    <div
-                      key={step.key}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
-                        isActive ? "bg-blue-950 border border-blue-800" :
-                        isDone ? "text-slate-400" : "text-slate-600"
+                    <div key={step.id}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+                        isActive ? "bg-indigo-50 border border-indigo-100" :
+                        isDone ? "bg-green-50/50" : ""
                       }`}
                     >
-                      {isDone ? (
-                        <CheckCircle className="h-4 w-4 text-green-400 shrink-0" />
-                      ) : isActive ? (
-                        <Loader2 className="h-4 w-4 text-blue-400 animate-spin shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                        isDone ? "bg-green-500" :
+                        isActive ? "bg-indigo-500" :
+                        "bg-slate-100"
+                      }`}>
+                        {isDone ? (
+                          <CheckCircle className="h-4 w-4 text-white" />
+                        ) : isActive ? (
+                          <Loader2 className="h-3.5 w-3.5 text-white animate-spin" />
+                        ) : (
+                          <Circle className="h-3.5 w-3.5 text-slate-400" />
+                        )}
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        isDone ? "text-green-700" :
+                        isActive ? "text-indigo-700" :
+                        "text-slate-400"
+                      }`}>
+                        {step.label}
+                      </span>
+                      {isActive && (
+                        <span className="ml-auto text-xs text-indigo-500 animate-pulse">Running...</span>
                       )}
-                      {step.label}
+                      {isDone && (
+                        <span className="ml-auto text-xs text-green-500">Done</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </Card>
+            </div>
 
-            {/* Logs */}
-            <Card className="bg-slate-900 border-slate-800 p-4">
-              <h3 className="text-sm font-medium text-slate-400 mb-3">Live Logs</h3>
-              <div className="bg-slate-950 rounded-lg p-3 h-48 overflow-y-auto font-mono text-xs text-slate-300 space-y-1">
+            {/* Live Logs */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-5 mb-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex gap-1.5">
+                  <div className="terminal-dot bg-red-400" />
+                  <div className="terminal-dot bg-yellow-400" />
+                  <div className="terminal-dot bg-green-400" />
+                </div>
+                <span className="text-xs text-slate-500 font-medium ml-1">Live Logs</span>
+                {scanning && <div className="ml-auto flex items-center gap-1.5 text-xs text-indigo-500">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                  Live
+                </div>}
+              </div>
+              <div className="bg-slate-950 rounded-xl p-4 h-32 overflow-y-auto font-mono text-xs">
                 {logs.length === 0 ? (
-                  <p className="text-slate-600">Logs will appear here when scan starts...</p>
+                  <p className="text-slate-500">Waiting to start scan...</p>
                 ) : (
-                  logs.map((log, i) => <div key={i}>{log}</div>)
+                  logs.map((log, i) => (
+                    <div key={i} className={`mb-0.5 ${
+                      log.includes("Error") ? "text-red-400" :
+                      log.includes("completed") || log.includes("✓") ? "text-green-400" :
+                      log.includes("PR opened") ? "text-purple-400" :
+                      "text-slate-300"
+                    }`}>
+                      {log}
+                    </div>
+                  ))
                 )}
                 <div ref={logsEndRef} />
               </div>
-            </Card>
+            </div>
 
-            {/* Scan Results Summary */}
-            {scanComplete && scanResult && (
-              <Card className="bg-green-950 border-green-800 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle className="h-5 w-5 text-green-400" />
-                  <h3 className="font-semibold text-green-300">Scan Complete!</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-slate-900 rounded-lg p-3">
-                    <div className="text-slate-400">Security Score</div>
-                    <div className="text-2xl font-bold text-green-400">{scanResult.score}/100</div>
+            {/* Result */}
+            <AnimatePresence>
+              {result && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="bg-white rounded-2xl border border-green-200 shadow-card p-6"
+                >
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                      <CheckCircle className="h-4 w-4 text-white" />
+                    </div>
+                    <h3 className="font-display font-bold text-slate-900">Scan Complete!</h3>
                   </div>
-                  <div className="bg-slate-900 rounded-lg p-3">
-                    <div className="text-slate-400">PRs Opened</div>
-                    <div className="text-2xl font-bold text-blue-400">{scanResult.prs_opened}</div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
+                      <div className="text-3xl font-display font-bold text-indigo-600">{result.security_score ?? 100}</div>
+                      <div className="text-xs text-slate-500">Security Score</div>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
+                      <div className="text-3xl font-display font-bold text-purple-600">{result.prs_opened ?? 0}</div>
+                      <div className="text-xs text-slate-500">PRs Opened</div>
+                    </div>
                   </div>
-                </div>
-                {scanResult.severity_counts && (
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {Object.entries(scanResult.severity_counts).map(([sev, count]: any) => (
+
+                  {/* Severity counts */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {result.findings_by_severity && Object.entries(result.findings_by_severity).map(([sev, count]: any) => (
                       count > 0 && (
-                        <Badge key={sev} className={
-                          sev === "CRITICAL" ? "bg-red-900 text-red-300" :
-                          sev === "HIGH" ? "bg-orange-900 text-orange-300" :
-                          sev === "MEDIUM" ? "bg-yellow-900 text-yellow-300" :
-                          "bg-slate-700 text-slate-300"
-                        }>
+                        <span key={sev} className={`px-2.5 py-1 rounded-full text-xs font-bold border ${severityColors[sev]}`}>
                           {count} {sev}
-                        </Badge>
+                        </span>
                       )
                     ))}
                   </div>
-                )}
-                <Button
-                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700"
-                  onClick={() => router.push("/results")}
-                >
-                  View Results
-                </Button>
-              </Card>
-            )}
-          </div>
+
+                  <button onClick={() => router.push("/results")}
+                    className="btn-premium w-full text-white font-semibold h-10 rounded-xl flex items-center justify-center gap-2 text-sm"
+                  >
+                    View Results
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </main>
     </div>

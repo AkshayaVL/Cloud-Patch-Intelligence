@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { Shield, Github, User, CheckCircle, Loader2 } from "lucide-react";
+import {
+  Shield, Github, User, CheckCircle,
+  Loader2, LogOut, Key, Globe, AlertTriangle
+} from "lucide-react";
 
 export default function SettingsPage() {
   const { user, loading, logout } = useAuth();
@@ -37,13 +39,13 @@ export default function SettingsPage() {
   const loadConnections = async () => {
     try {
       const res = await api.get("/connections/get");
-      if (res.data && res.data.aws_access_key_id) {
+      if (res.data?.aws_access_key_id) {
         setAwsKeyId(res.data.aws_access_key_id);
         setAwsRegion(res.data.aws_region || "us-east-1");
         setGithubRepo(res.data.github_repo || "");
       }
     } catch (err) {
-      console.error("Load connections error:", err);
+      console.error(err);
     } finally {
       setConnLoading(false);
     }
@@ -51,9 +53,7 @@ export default function SettingsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSaving(true);
-    setSaved(false);
+    setError(""); setSaving(true); setSaved(false);
     try {
       await api.post("/connections/save", {
         aws_access_key_id: awsKeyId,
@@ -71,162 +71,164 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    router.push("/");
-  };
-
   if (loading || !user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
-      <main className="max-w-2xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-slate-400 mt-1">Manage your account and connections</p>
-        </div>
+      <main className="max-w-2xl mx-auto px-6 py-8">
 
-        {/* Account Info */}
-        <Card className="bg-slate-900 border-slate-800 p-6 mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <User className="h-5 w-5 text-blue-400" />
-            <h2 className="font-semibold text-lg">Account</h2>
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between items-center py-2 border-b border-slate-800">
-              <span className="text-slate-400 text-sm">Email</span>
-              <span className="text-white text-sm">{user.email}</span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-slate-400 text-sm">User ID</span>
-              <span className="text-slate-500 text-xs font-mono">{user.user_id}</span>
-            </div>
-          </div>
-        </Card>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="text-2xl font-display font-bold text-slate-900">Settings</h1>
+          <p className="text-slate-500 text-sm mt-1">Manage your account and integrations</p>
+        </motion.div>
 
-        {/* Connections Form */}
-        <form onSubmit={handleSave} className="space-y-6">
-          {/* AWS */}
-          <Card className="bg-slate-900 border-slate-800 p-6">
+        {/* Account Card */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5"
+        >
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+              <User className="h-4 w-4 text-indigo-600" />
+            </div>
+            <h2 className="font-display font-bold text-slate-900">Account</h2>
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center py-3 border-b border-slate-100">
+              <span className="text-slate-500 text-sm">Email</span>
+              <span className="text-slate-900 text-sm font-medium">{user.email}</span>
+            </div>
+            <div className="flex justify-between items-center py-3">
+              <span className="text-slate-500 text-sm">User ID</span>
+              <span className="text-slate-400 text-xs font-mono bg-slate-50 px-2 py-1 rounded-lg">{user.user_id?.slice(0, 16)}...</span>
+            </div>
+          </div>
+        </motion.div>
+
+        <form onSubmit={handleSave} className="space-y-5">
+          {/* AWS Card */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="bg-white rounded-2xl border border-slate-100 shadow-card p-6"
+          >
             <div className="flex items-center gap-3 mb-5">
-              <Shield className="h-5 w-5 text-orange-400" />
-              <h2 className="font-semibold text-lg">AWS Credentials</h2>
+              <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center">
+                <Shield className="h-4 w-4 text-orange-600" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-slate-900">AWS Credentials</h2>
+                <p className="text-xs text-slate-400">Used for scanning your infrastructure</p>
+              </div>
             </div>
             {connLoading ? (
-              <div className="flex items-center gap-2 text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Loading saved credentials...</span>
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => <div key={i} className="h-10 shimmer rounded-xl" />)}
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <Label className="text-slate-300">Access Key ID</Label>
-                  <Input
-                    value={awsKeyId}
-                    onChange={(e) => setAwsKeyId(e.target.value)}
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block flex items-center gap-1.5">
+                    <Key className="h-3.5 w-3.5" /> Access Key ID
+                  </Label>
+                  <Input value={awsKeyId} onChange={e => setAwsKeyId(e.target.value)}
                     placeholder="AKIAIOSFODNN7EXAMPLE"
-                    className="mt-1.5 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                  />
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-slate-300">Secret Access Key</Label>
-                  <Input
-                    type="password"
-                    value={awsSecret}
-                    onChange={(e) => setAwsSecret(e.target.value)}
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block flex items-center gap-1.5">
+                    <Key className="h-3.5 w-3.5" /> Secret Access Key
+                  </Label>
+                  <Input type="password" value={awsSecret} onChange={e => setAwsSecret(e.target.value)}
                     placeholder="Leave blank to keep existing"
-                    className="mt-1.5 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                  />
-                  <p className="text-slate-500 text-xs mt-1">Leave blank to keep your existing secret key</p>
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
+                  <p className="text-xs text-slate-400 mt-1">Leave blank to keep your existing secret</p>
                 </div>
                 <div>
-                  <Label className="text-slate-300">Region</Label>
-                  <Input
-                    value={awsRegion}
-                    onChange={(e) => setAwsRegion(e.target.value)}
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5" /> Region
+                  </Label>
+                  <Input value={awsRegion} onChange={e => setAwsRegion(e.target.value)}
                     placeholder="us-east-1"
-                    className="mt-1.5 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                  />
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
                 </div>
               </div>
             )}
-          </Card>
+          </motion.div>
 
-          {/* GitHub */}
-          <Card className="bg-slate-900 border-slate-800 p-6">
+          {/* GitHub Card */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="bg-white rounded-2xl border border-slate-100 shadow-card p-6"
+          >
             <div className="flex items-center gap-3 mb-5">
-              <Github className="h-5 w-5 text-white" />
-              <h2 className="font-semibold text-lg">GitHub Connection</h2>
+              <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center">
+                <Github className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-slate-900">GitHub Connection</h2>
+                <p className="text-xs text-slate-400">Used for opening pull requests</p>
+              </div>
             </div>
             <div className="space-y-4">
               <div>
-                <Label className="text-slate-300">Personal Access Token</Label>
-                <Input
-                  type="password"
-                  value={githubToken}
-                  onChange={(e) => setGithubToken(e.target.value)}
+                <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Personal Access Token</Label>
+                <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)}
                   placeholder="Leave blank to keep existing"
-                  className="mt-1.5 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                />
-                <p className="text-slate-500 text-xs mt-1">Leave blank to keep your existing token</p>
+                  className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
               </div>
               <div>
-                <Label className="text-slate-300">Repository</Label>
-                <Input
-                  value={githubRepo}
-                  onChange={(e) => setGithubRepo(e.target.value)}
+                <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Repository</Label>
+                <Input value={githubRepo} onChange={e => setGithubRepo(e.target.value)}
                   placeholder="username/repo-name"
-                  className="mt-1.5 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                />
+                  className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
               </div>
             </div>
-          </Card>
+          </motion.div>
 
           {error && (
-            <div className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg px-4 py-3">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </div>
           )}
 
           {saved && (
-            <div className="text-green-400 text-sm bg-green-950 border border-green-800 rounded-lg px-4 py-3 flex items-center gap-2">
-              <CheckCircle className="h-4 w-4" />
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl flex items-center gap-2"
+            >
+              <CheckCircle className="h-4 w-4 shrink-0" />
               Settings saved successfully!
-            </div>
+            </motion.div>
           )}
 
-          <Button
-            type="submit"
-            disabled={saving}
-            className="w-full bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
+          <button type="submit" disabled={saving}
+            className="btn-premium w-full text-white font-semibold h-11 rounded-xl flex items-center justify-center gap-2 disabled:opacity-70"
           >
             {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : "Save Settings"}
-          </Button>
+              <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+            ) : (
+              <><CheckCircle className="h-4 w-4" /> Save Settings</>
+            )}
+          </button>
         </form>
 
         {/* Danger Zone */}
-        <Card className="bg-slate-900 border-red-900 p-6 mt-6">
-          <h2 className="font-semibold text-lg text-red-400 mb-4">Danger Zone</h2>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
+          className="bg-white rounded-2xl border border-red-100 shadow-card p-6 mt-5"
+        >
+          <h2 className="font-display font-bold text-red-600 mb-4 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" /> Danger Zone
+          </h2>
           <div className="flex justify-between items-center">
             <div>
-              <p className="text-white text-sm font-medium">Sign out</p>
-              <p className="text-slate-400 text-xs mt-0.5">Sign out of your account</p>
+              <p className="text-slate-900 text-sm font-medium">Sign out of CPI</p>
+              <p className="text-slate-400 text-xs mt-0.5">You'll need to sign in again to access your data</p>
             </div>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="border-red-800 text-red-400 hover:bg-red-950"
-            >
+            <button onClick={() => { logout(); router.push("/"); }}
+              className="flex items-center gap-2 text-red-600 font-semibold text-sm px-4 py-2 rounded-xl border border-red-200 hover:bg-red-50 transition-colors">
+              <LogOut className="h-4 w-4" />
               Sign Out
-            </Button>
+            </button>
           </div>
-        </Card>
+        </motion.div>
       </main>
     </div>
   );

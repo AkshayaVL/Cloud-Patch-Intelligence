@@ -1,65 +1,80 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
-import { Shield, LayoutDashboard, Scan, GitPullRequest, Settings, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Shield, LayoutDashboard, Scan, GitPullRequest,
+  Settings, LogOut, ChevronRight
+} from "lucide-react";
+
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/scan", label: "Scan", icon: Scan },
+  { href: "/prs", label: "PR Tracker", icon: GitPullRequest },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
 
 export default function Navbar() {
+  const pathname = usePathname();
   const { user, logout } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
 
   const handleLogout = () => {
     logout();
     router.push("/");
   };
 
-  const links = [
-    { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-    { href: "/scan", label: "Scan", icon: <Scan className="h-4 w-4" /> },
-    { href: "/prs", label: "PR Tracker", icon: <GitPullRequest className="h-4 w-4" /> },
-    { href: "/settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
-  ];
-
   return (
-    <nav className="border-b border-slate-800 bg-slate-950 px-6 py-4 flex justify-between items-center">
-      <div className="flex items-center gap-8">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <Shield className="h-6 w-6 text-blue-400" />
-          <span className="font-bold text-white">CPI</span>
+    <nav className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 py-0 flex items-center h-16">
+        {/* Logo */}
+        <Link href="/dashboard" className="flex items-center gap-2.5 mr-10">
+          <div className="w-8 h-8 rounded-lg bg-indigo-gradient flex items-center justify-center">
+            <Shield className="h-4 w-4 text-white" />
+          </div>
+          <span className="font-display font-bold text-slate-900 text-base">CPI</span>
         </Link>
-        <div className="flex items-center gap-1">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`flex items-center gap-2 ${
-                  pathname === link.href
-                    ? "text-white bg-slate-800"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {link.icon}
-                {link.label}
-              </Button>
-            </Link>
-          ))}
+
+        {/* Nav items */}
+        <div className="flex items-center gap-1 flex-1">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href}>
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  active
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                }`}>
+                  <Icon className={`h-4 w-4 ${active ? "text-indigo-600" : ""}`} />
+                  {item.label}
+                </div>
+              </Link>
+            );
+          })}
         </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <span className="text-slate-400 text-sm">{user?.email}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLogout}
-          className="text-slate-400 hover:text-white flex items-center gap-2"
-        >
-          <LogOut className="h-4 w-4" />
-          Logout
-        </Button>
+
+        {/* User */}
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-2 border border-slate-100">
+            <div className="w-6 h-6 rounded-full bg-indigo-gradient flex items-center justify-center text-white text-xs font-bold">
+              {user?.email?.[0]?.toUpperCase()}
+            </div>
+            <span className="text-slate-700 text-sm font-medium max-w-[160px] truncate">
+              {user?.email}
+            </span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-red-500 text-sm font-medium px-3 py-2 rounded-xl hover:bg-red-50 transition-all"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden md:inline">Logout</span>
+          </button>
+        </div>
       </div>
     </nav>
   );
