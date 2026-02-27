@@ -1,6 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.agent import AgentOrchestrator
-from app.utils.security import decode_access_token
 from app.config import settings
 from supabase import create_client
 import json
@@ -23,22 +22,41 @@ async def websocket_scan(websocket: WebSocket):
         raw = await websocket.receive_text()
         data = json.loads(raw)
 
-        # Step 2 — Validate token
+        # Step 2 — Validate token via Supabase
         token = data.get("token")
-        payload = decode_access_token(token)
-        if not payload:
+        if not token:
             await websocket.send_text(json.dumps({
                 "step": "error",
-                "message": "Invalid or expired token"
+                "message": "No token provided"
             }))
             await websocket.close()
             return
 
-        user_id = payload.get("sub")
-        supabase = create_client(settings.supabase_url, settings.supabase_anon_key)
+        try:
+            # Use Supabase service role to verify the token
+            supabase = create_client(
+                settings.supabase_url,
+                settings.supabase_service_role_key
+            )
+            user_response = supabase.auth.get_user(token)
+            user_id = user_response.user.id
+            if not user_id:
+                raise Exception("No user found")
+        except Exception as e:
+            await websocket.send_text(json.dumps({
+                "step": "error",
+                "message": f"Invalid or expired token: {str(e)}"
+            }))
+            await websocket.close()
+            return
+
+        supabase_client = create_client(
+            settings.supabase_url,
+            settings.supabase_service_role_key
+        )
 
         # Step 3 — Create scan record
-        scan = supabase.table("scans").insert({
+        scan = supabase_client.table("scans").insert({
             "user_id": user_id,
             "status": "running"
         }).execute()
@@ -67,7 +85,6 @@ async def websocket_scan(websocket: WebSocket):
             progress_callback=sync_progress
         )
 
-        # Run in thread pool to not block event loop
         results = await loop.run_in_executor(None, agent.run, scan_id)
 
         await send_progress({

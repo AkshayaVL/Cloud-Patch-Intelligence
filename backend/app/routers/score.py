@@ -7,7 +7,7 @@ router = APIRouter(prefix="/score", tags=["score"])
 
 
 def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_anon_key)
+    return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
 @router.get("/latest")

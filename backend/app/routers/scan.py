@@ -8,7 +8,7 @@ router = APIRouter(prefix="/scan", tags=["scan"])
 
 
 def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_anon_key)
+    return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
 @router.post("/run")

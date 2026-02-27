@@ -21,7 +21,7 @@ class AgentOrchestrator:
         self.llm = LLMEngine()
         self.github = GitHubPRCreator(github_token, github_repo)
         self.user_id = user_id
-        self.supabase = create_client(settings.supabase_url, settings.supabase_anon_key)
+        self.supabase = create_client(settings.supabase_url, settings.supabase_service_role_key)
         self.progress_callback = progress_callback
 
     def _emit(self, step: str, message: str, data: dict = None):
