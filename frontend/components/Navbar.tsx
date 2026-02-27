@@ -6,14 +6,14 @@ import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import {
   Shield, LayoutDashboard, Scan, GitPullRequest,
-  Settings, LogOut, ChevronRight
+  Settings, LogOut
 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/scan", label: "Scan", icon: Scan },
-  { href: "/prs", label: "PR Tracker", icon: GitPullRequest },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, tourId: "" },
+  { href: "/scan", label: "Scan", icon: Scan, tourId: "tour-nav-scan" },
+  { href: "/prs", label: "PR Tracker", icon: GitPullRequest, tourId: "tour-nav-prs" },
+  { href: "/settings", label: "Settings", icon: Settings, tourId: "tour-nav-settings" },
 ];
 
 export default function Navbar() {
@@ -30,7 +30,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-6 py-0 flex items-center h-16">
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2.5 mr-10">
+        <Link href="/dashboard" className="flex items-center gap-2.5 mr-10" id="tour-logo">
           <div className="w-8 h-8 rounded-lg bg-indigo-gradient flex items-center justify-center">
             <Shield className="h-4 w-4 text-white" />
           </div>
@@ -43,7 +43,7 @@ export default function Navbar() {
             const active = pathname === item.href;
             const Icon = item.icon;
             return (
-              <Link key={item.href} href={item.href}>
+              <Link key={item.href} href={item.href} id={item.tourId || undefined}>
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   active
                     ? "bg-indigo-50 text-indigo-700"
@@ -59,7 +59,7 @@ export default function Navbar() {
 
         {/* User */}
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-2 border border-slate-100">
+          <div className="hidden md:flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-2 border border-slate-100" id="tour-user">
             <div className="w-6 h-6 rounded-full bg-indigo-gradient flex items-center justify-center text-white text-xs font-bold">
               {user?.email?.[0]?.toUpperCase()}
             </div>

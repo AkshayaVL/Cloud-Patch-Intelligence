@@ -3,10 +3,11 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import OnboardingTour from "@/components/OnboardingTour";
+import TourButton from "@/components/TourButton";
 import { scoreAPI, scanAPI, prsAPI } from "@/lib/api";
 import {
   Shield, Scan, GitPullRequest, CheckCircle,
@@ -17,8 +18,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Area, AreaChart
 } from "recharts";
-
-import { Variants } from "framer-motion";
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -131,6 +130,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-50">
       <Navbar />
       <OnboardingTour />
+      <TourButton />
       <main className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Header */}
@@ -144,7 +144,7 @@ export default function DashboardPage() {
             <p className="text-slate-500 text-sm mt-1">Here's your cloud security overview</p>
           </motion.div>
           <motion.div variants={fadeUp}>
-            <Link href="/scan">
+            <Link href="/scan" id="tour-run-scan">
               <button className="btn-premium text-white font-semibold px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm">
                 <Scan className="h-4 w-4" />
                 Run New Scan
@@ -159,6 +159,7 @@ export default function DashboardPage() {
         >
           {/* Score card */}
           <motion.div variants={fadeUp}
+            id="tour-score"
             className="col-span-1 bg-white rounded-2xl border border-slate-100 shadow-card p-6 flex flex-col items-center justify-center"
           >
             {dataLoading ? (
@@ -183,6 +184,7 @@ export default function DashboardPage() {
             { label: "PRs Merged", value: prs.filter(p => p.status === "merged").length, icon: <CheckCircle className="h-5 w-5 text-green-600" />, bg: "bg-green-50", border: "border-green-100" },
           ].map((stat, i) => (
             <motion.div key={i} variants={fadeUp}
+              id={i === 0 ? "tour-stats" : undefined}
               className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 flex flex-col justify-between"
             >
               <div className={`w-10 h-10 rounded-xl ${stat.bg} border ${stat.border} flex items-center justify-center mb-4`}>
@@ -237,6 +239,7 @@ export default function DashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
             className="bg-white rounded-2xl border border-slate-100 shadow-card p-6"
+            id="tour-recent-scans"
           >
             <div className="flex justify-between items-center mb-5">
               <div className="flex items-center gap-2">
@@ -285,6 +288,7 @@ export default function DashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
             className="bg-white rounded-2xl border border-slate-100 shadow-card p-6"
+            id="tour-recent-prs"
           >
             <div className="flex justify-between items-center mb-5">
               <div className="flex items-center gap-2">
