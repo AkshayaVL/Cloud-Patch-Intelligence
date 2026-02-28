@@ -7,10 +7,11 @@ import { useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
 import {
   Shield, Github, Zap, CheckCircle, Circle,
   Loader2, Terminal, ArrowRight, ExternalLink,
-  AlertTriangle, Trophy, ChevronRight
+  AlertTriangle, Trophy, Settings
 } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -40,6 +41,8 @@ export default function ScanPage() {
   const [awsRegion, setAwsRegion] = useState("us-east-1");
   const [githubToken, setGithubToken] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
+  const [credentialsLoaded, setCredentialsLoaded] = useState(false);
+  const [credentialsLoading, setCredentialsLoading] = useState(true);
 
   const [scanning, setScanning] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
@@ -57,8 +60,28 @@ export default function ScanPage() {
   }, [user, loading]);
 
   useEffect(() => {
+    if (user) loadSavedCredentials();
+  }, [user]);
+
+  useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
+
+  const loadSavedCredentials = async () => {
+    try {
+      const res = await api.get("/connections/get");
+      if (res.data && res.data.aws_access_key_id) {
+        setAwsKey(res.data.aws_access_key_id);
+        setAwsRegion(res.data.aws_region || "us-east-1");
+        setGithubRepo(res.data.github_repo || "");
+        setCredentialsLoaded(true);
+      }
+    } catch (err) {
+      console.error("Failed to load saved credentials", err);
+    } finally {
+      setCredentialsLoading(false);
+    }
+  };
 
   const addLog = (msg: string) => {
     const time = new Date().toLocaleTimeString();
@@ -69,7 +92,7 @@ export default function ScanPage() {
 
   const handleScan = async () => {
     if (!awsKey || !awsSecret || !githubToken || !githubRepo) {
-      setError("Please fill in all required fields.");
+      setError("Please fill in all required fields. AWS Secret and GitHub Token are required each time for security.");
       return;
     }
     setError("");
@@ -115,8 +138,6 @@ export default function ScanPage() {
         setResult(data.data);
         setScanning(false);
         addLog("Scan completed successfully");
-
-        // Confetti!
         confetti({
           particleCount: 120,
           spread: 80,
@@ -158,18 +179,49 @@ export default function ScanPage() {
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl font-display font-bold text-slate-900 mb-1">Run Security Scan</h1>
-          <p className="text-slate-500 text-sm mb-8">Connect your AWS account and GitHub repo to start the autonomous scan.</p>
+          <p className="text-slate-500 text-sm mb-2">Connect your AWS account and GitHub repo to start the autonomous scan.</p>
+
+          {/* Credentials loaded banner */}
+          {!credentialsLoading && credentialsLoaded && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-xs font-medium px-3 py-1.5 rounded-lg mb-6"
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+              Credentials loaded from Settings — just enter your secrets below
+            </motion.div>
+          )}
+
+          {!credentialsLoading && !credentialsLoaded && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-lg mb-6 cursor-pointer hover:bg-amber-100 transition-colors"
+              onClick={() => router.push("/settings")}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Save credentials in Settings to auto-fill this form next time →
+            </motion.div>
+          )}
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left — Credentials */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-orange-600" />
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
+                    <Shield className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <h2 className="font-display font-bold text-slate-900">AWS Credentials</h2>
                 </div>
-                <h2 className="font-display font-bold text-slate-900">AWS Credentials</h2>
+                {credentialsLoaded && (
+                  <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-lg border border-green-100">
+                    ✓ Auto-filled
+                  </span>
+                )}
               </div>
               <div className="space-y-4">
                 <div>
@@ -179,7 +231,10 @@ export default function ScanPage() {
                     className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Secret Access Key <span className="text-red-400">*</span></Label>
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">
+                    Secret Access Key <span className="text-red-400">*</span>
+                    <span className="text-slate-400 font-normal ml-1">(enter each time for security)</span>
+                  </Label>
                   <Input type="password" value={awsSecret} onChange={e => setAwsSecret(e.target.value)}
                     placeholder="••••••••••••••••••••••••"
                     className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
@@ -194,15 +249,25 @@ export default function ScanPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
-                  <Github className="h-4 w-4 text-white" />
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+                    <Github className="h-4 w-4 text-white" />
+                  </div>
+                  <h2 className="font-display font-bold text-slate-900">GitHub Connection</h2>
                 </div>
-                <h2 className="font-display font-bold text-slate-900">GitHub Connection</h2>
+                {credentialsLoaded && githubRepo && (
+                  <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-lg border border-green-100">
+                    ✓ Auto-filled
+                  </span>
+                )}
               </div>
               <div className="space-y-4">
                 <div>
-                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Personal Access Token <span className="text-red-400">*</span></Label>
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">
+                    Personal Access Token <span className="text-red-400">*</span>
+                    <span className="text-slate-400 font-normal ml-1">(enter each time for security)</span>
+                  </Label>
                   <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)}
                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                     className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400 text-sm" />
@@ -245,7 +310,6 @@ export default function ScanPage() {
 
           {/* Right — Progress */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-            {/* Progress Steps */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-5">
               <div className="flex justify-between items-center mb-5">
                 <div className="flex items-center gap-2">
@@ -258,7 +322,6 @@ export default function ScanPage() {
                 </div>
               </div>
 
-              {/* Progress bar */}
               <div className="h-1.5 bg-slate-100 rounded-full mb-6 overflow-hidden">
                 <motion.div
                   className="h-full bg-indigo-gradient rounded-full"
@@ -267,13 +330,10 @@ export default function ScanPage() {
                 />
               </div>
 
-              {/* Steps */}
               <div className="space-y-1">
                 {steps.map((step, i) => {
-                  const Icon = step.icon;
                   const isDone = completedSteps.has(i);
                   const isActive = currentStep === i && scanning;
-                  const isPending = !isDone && !isActive;
 
                   return (
                     <div key={step.id}
@@ -302,12 +362,8 @@ export default function ScanPage() {
                       }`}>
                         {step.label}
                       </span>
-                      {isActive && (
-                        <span className="ml-auto text-xs text-indigo-500 animate-pulse">Running...</span>
-                      )}
-                      {isDone && (
-                        <span className="ml-auto text-xs text-green-500">Done</span>
-                      )}
+                      {isActive && <span className="ml-auto text-xs text-indigo-500 animate-pulse">Running...</span>}
+                      {isDone && <span className="ml-auto text-xs text-green-500">Done</span>}
                     </div>
                   );
                 })}
@@ -373,7 +429,6 @@ export default function ScanPage() {
                     </div>
                   </div>
 
-                  {/* Severity counts */}
                   <div className="flex flex-wrap gap-2 mb-4">
                     {result.findings_by_severity && Object.entries(result.findings_by_severity).map(([sev, count]: any) => (
                       count > 0 && (
