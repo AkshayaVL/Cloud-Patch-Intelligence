@@ -7,7 +7,7 @@ router = APIRouter(prefix="/connections", tags=["connections"])
 
 
 def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_anon_key)
+    return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
 @router.post("/save")
@@ -22,23 +22,23 @@ def save_connections(
         "user_id", user_id
     ).execute()
 
+    data = {
+        "aws_access_key_id": body.get("aws_access_key_id"),
+        "aws_region": body.get("aws_region", "us-east-1"),
+        "github_repo": body.get("github_repo"),
+    }
+
+    # Only update secrets if provided
+    if body.get("aws_secret_access_key"):
+        data["aws_secret_access_key"] = body.get("aws_secret_access_key")
+    if body.get("github_token"):
+        data["github_token"] = body.get("github_token")
+
     if existing.data:
-        supabase.table("connections").update({
-            "aws_access_key_id": body.get("aws_access_key_id"),
-            "aws_secret_access_key": body.get("aws_secret_access_key"),
-            "aws_region": body.get("aws_region", "us-east-1"),
-            "github_token": body.get("github_token"),
-            "github_repo": body.get("github_repo"),
-        }).eq("user_id", user_id).execute()
+        supabase.table("connections").update(data).eq("user_id", user_id).execute()
     else:
-        supabase.table("connections").insert({
-            "user_id": user_id,
-            "aws_access_key_id": body.get("aws_access_key_id"),
-            "aws_secret_access_key": body.get("aws_secret_access_key"),
-            "aws_region": body.get("aws_region", "us-east-1"),
-            "github_token": body.get("github_token"),
-            "github_repo": body.get("github_repo"),
-        }).execute()
+        data["user_id"] = user_id
+        supabase.table("connections").insert(data).execute()
 
     return {"status": "saved"}
 
