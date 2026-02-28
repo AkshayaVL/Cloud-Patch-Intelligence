@@ -39,9 +39,11 @@ export default function SettingsPage() {
   const loadConnections = async () => {
     try {
       const res = await api.get("/connections/get");
-      if (res.data?.aws_access_key_id) {
-        setAwsKeyId(res.data.aws_access_key_id);
+      if (res.data && res.data.aws_access_key_id) {
+        setAwsKeyId(res.data.aws_access_key_id || "");
+        setAwsSecret(res.data.aws_secret_access_key || "");
         setAwsRegion(res.data.aws_region || "us-east-1");
+        setGithubToken(res.data.github_token || "");
         setGithubRepo(res.data.github_repo || "");
       }
     } catch (err) {
@@ -138,9 +140,8 @@ export default function SettingsPage() {
                     <Key className="h-3.5 w-3.5" /> Secret Access Key
                   </Label>
                   <Input type="password" value={awsSecret} onChange={e => setAwsSecret(e.target.value)}
-                    placeholder="Leave blank to keep existing"
+                    placeholder="••••••••••••••••••••••••"
                     className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
-                  <p className="text-xs text-slate-400 mt-1">Leave blank to keep your existing secret</p>
                 </div>
                 <div>
                   <Label className="text-slate-600 text-sm font-medium mb-1.5 block flex items-center gap-1.5">
@@ -167,20 +168,26 @@ export default function SettingsPage() {
                 <p className="text-xs text-slate-400">Used for opening pull requests</p>
               </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Personal Access Token</Label>
-                <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)}
-                  placeholder="Leave blank to keep existing"
-                  className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
+            {connLoading ? (
+              <div className="space-y-3">
+                {[1, 2].map(i => <div key={i} className="h-10 shimmer rounded-xl" />)}
               </div>
-              <div>
-                <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Repository</Label>
-                <Input value={githubRepo} onChange={e => setGithubRepo(e.target.value)}
-                  placeholder="username/repo-name"
-                  className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Personal Access Token</Label>
+                  <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-slate-600 text-sm font-medium mb-1.5 block">Repository</Label>
+                  <Input value={githubRepo} onChange={e => setGithubRepo(e.target.value)}
+                    placeholder="username/repo-name"
+                    className="h-10 border-slate-200 rounded-xl focus:border-indigo-400 text-sm" />
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
 
           {error && (

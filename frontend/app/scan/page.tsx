@@ -71,8 +71,10 @@ export default function ScanPage() {
     try {
       const res = await api.get("/connections/get");
       if (res.data && res.data.aws_access_key_id) {
-        setAwsKey(res.data.aws_access_key_id);
+        setAwsKey(res.data.aws_access_key_id || "");
+        setAwsSecret(res.data.aws_secret_access_key || "");
         setAwsRegion(res.data.aws_region || "us-east-1");
+        setGithubToken(res.data.github_token || "");
         setGithubRepo(res.data.github_repo || "");
         setCredentialsLoaded(true);
       }

@@ -28,7 +28,6 @@ def save_connections(
         "github_repo": body.get("github_repo"),
     }
 
-    # Only update secrets if provided
     if body.get("aws_secret_access_key"):
         data["aws_secret_access_key"] = body.get("aws_secret_access_key")
     if body.get("github_token"):
@@ -48,7 +47,7 @@ def get_connections(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("sub")
     supabase = get_supabase()
     result = supabase.table("connections").select(
-        "id, aws_access_key_id, aws_region, github_repo, created_at"
+        "id, aws_access_key_id, aws_secret_access_key, aws_region, github_token, github_repo, created_at"
     ).eq("user_id", user_id).execute()
     if result.data:
         return result.data[0]
