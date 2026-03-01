@@ -8,7 +8,7 @@ genai.configure(api_key=settings.gemini_api_key)
 
 class LLMEngine:
     def __init__(self):
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
 
     def _clean_json(self, text: str) -> str:
         # Remove markdown code blocks if present
