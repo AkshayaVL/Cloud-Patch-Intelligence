@@ -90,7 +90,11 @@ async def websocket_scan(websocket: WebSocket):
         await send_progress({
             "step": "completed",
             "message": "Scan completed successfully",
-            "data": results
+            "data": {
+                "security_score": results.get("score", 100),
+                "prs_opened": results.get("prs_opened", 0),
+                "findings_by_severity": results.get("severity_counts", {})
+            }
         })
 
     except WebSocketDisconnect:

@@ -185,7 +185,7 @@ class AgentOrchestrator:
             })
 
             results["score"] = score
-            results["severity_counts"] = counts
+            results["severity_counts"] = actual_counts
             return results
 
         except Exception as e:
