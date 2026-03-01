@@ -157,7 +157,15 @@ class AgentOrchestrator:
 
             # ── STEP 6: Calculate Security Score ─────────
             self._emit("scoring", "Calculating security score...")
-            score = self._calculate_score(counts)
+            
+            # Recalculate counts from actual processed findings
+            actual_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+            for finding in findings:
+                sev = finding.get("severity", "MEDIUM").upper()
+                if sev in actual_counts:
+                    actual_counts[sev] += 1
+            
+            score = self._calculate_score(actual_counts)
 
             self.supabase.table("security_scores").insert({
                 "user_id": self.user_id,
@@ -171,8 +179,9 @@ class AgentOrchestrator:
             }).eq("id", scan_id).execute()
 
             self._emit("completed", f"Scan complete. Score: {score}/100. PRs opened: {results['prs_opened']}", {
-                "score": score,
-                "prs_opened": results["prs_opened"]
+                "security_score": score,
+                "prs_opened": results["prs_opened"],
+                "findings_by_severity": actual_counts
             })
 
             results["score"] = score
