@@ -5,8 +5,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Shield, Zap, GitPullRequest, BarChart3,
-  ArrowRight, CheckCircle, Play, ChevronRight,
-  Lock, Cloud, Code2, AlertTriangle
+  ArrowRight, CheckCircle, Play,
+  Lock, Cloud, Code2, Network, Router, Globe, Server
 } from "lucide-react";
 
 import { Variants } from "framer-motion";
@@ -42,6 +42,15 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
 
   return <div ref={ref}>{count}{suffix}</div>;
 }
+
+// Scan categories shown in hero mockup
+const HERO_CATEGORIES = [
+  { label: "Security Groups", icon: Lock,    color: "text-indigo-600", bg: "bg-indigo-50", done: true  },
+  { label: "Subnets",         icon: Network, color: "text-blue-600",   bg: "bg-blue-50",   done: true  },
+  { label: "Route Tables",    icon: Router,  color: "text-violet-600", bg: "bg-violet-50", done: true  },
+  { label: "VPC",             icon: Globe,   color: "text-cyan-600",   bg: "bg-cyan-50",   done: false, active: true },
+  { label: "EC2",             icon: Server,  color: "text-teal-600",   bg: "bg-teal-50",   done: false },
+];
 
 export default function LandingPage() {
   return (
@@ -81,7 +90,6 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="pt-32 pb-20 px-6 bg-hero-pattern relative overflow-hidden">
-        {/* Background blobs */}
         <div className="absolute top-20 left-1/4 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50 animate-float" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-purple-100 rounded-full blur-3xl opacity-40 animate-float" style={{ animationDelay: "1.5s" }} />
 
@@ -100,9 +108,9 @@ export default function LandingPage() {
             </motion.h1>
 
             <motion.p variants={fadeUp} className="text-xl text-slate-500 mb-10 max-w-3xl mx-auto leading-relaxed">
-              CPI scans your AWS infrastructure, analyzes every misconfiguration using Google Gemini AI,
-              generates production-ready Terraform patches, and opens GitHub Pull Requests —
-              all without human intervention.
+              CPI scans your AWS infrastructure — Security Groups, Subnets, Route Tables, VPC, and EC2 —
+              analyzes every misconfiguration using Google Gemini AI, generates production-ready Terraform patches,
+              and opens GitHub Pull Requests without human intervention.
             </motion.p>
 
             <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -122,7 +130,7 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
-        {/* Hero mockup */}
+        {/* Hero mockup — updated with category progress */}
         <motion.div
           initial={{ opacity: 0, y: 60 }}
           animate={{ opacity: 1, y: 0 }}
@@ -144,42 +152,66 @@ export default function LandingPage() {
             {/* Mock scan UI */}
             <div className="p-6 bg-gradient-to-br from-indigo-50/50 to-white">
               <div className="flex gap-4">
+                {/* Left — category scan progress */}
                 <div className="flex-1 space-y-2">
-                  {[
-                    { label: "Connecting to AWS", done: true },
-                    { label: "Scanning 47 resources", done: true },
-                    { label: "AI analyzing findings", done: true, active: false },
-                    { label: "Generating Terraform patches", done: false, active: true },
-                    { label: "Opening GitHub PRs", done: false },
-                  ].map((step, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-xl text-sm ${step.active ? "bg-indigo-50 border border-indigo-200" : ""}`}>
-                      {step.done ? (
-                        <CheckCircle className="h-4 w-4 text-indigo-500 shrink-0" />
-                      ) : step.active ? (
-                        <div className="h-4 w-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin shrink-0" />
-                      ) : (
-                        <div className="h-4 w-4 rounded-full border-2 border-slate-200 shrink-0" />
-                      )}
-                      <span className={step.done ? "text-slate-600" : step.active ? "text-indigo-700 font-medium" : "text-slate-400"}>
-                        {step.label}
-                      </span>
-                    </div>
-                  ))}
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Scanning AWS Resources</p>
+                  {HERO_CATEGORIES.map((cat, i) => {
+                    const Icon = cat.icon;
+                    return (
+                      <div key={i} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm ${
+                        cat.active ? "bg-indigo-50 border border-indigo-200" : ""
+                      }`}>
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${cat.bg}`}>
+                          {cat.done ? (
+                            <CheckCircle className={`h-3.5 w-3.5 ${cat.color}`} />
+                          ) : cat.active ? (
+                            <div className={`h-3.5 w-3.5 rounded-full border-2 ${cat.color} border-t-transparent animate-spin`} style={{ borderColor: "currentColor", borderTopColor: "transparent" }} />
+                          ) : (
+                            <Icon className="h-3.5 w-3.5 text-slate-300" />
+                          )}
+                        </div>
+                        <span className={`text-sm font-medium ${
+                          cat.done   ? "text-slate-700" :
+                          cat.active ? cat.color        : "text-slate-400"
+                        }`}>
+                          {cat.label}
+                        </span>
+                        {cat.done   && <span className="ml-auto text-xs text-green-500 font-medium">✓ Done</span>}
+                        {cat.active && <span className="ml-auto text-xs text-indigo-500 animate-pulse">Scanning...</span>}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="w-48 space-y-3">
+
+                {/* Right — score + findings */}
+                <div className="w-44 space-y-3">
                   <div className="bg-white rounded-xl border border-slate-100 p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-indigo-600">87</div>
+                    <div className="text-2xl font-bold text-indigo-600">72</div>
                     <div className="text-xs text-slate-500">Security Score</div>
                   </div>
                   <div className="bg-white rounded-xl border border-slate-100 p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-green-500">12</div>
+                    <div className="text-2xl font-bold text-green-500">9</div>
                     <div className="text-xs text-slate-500">PRs Opened</div>
                   </div>
-                  <div className="bg-indigo-600 rounded-xl p-3 text-center">
-                    <div className="text-xs text-indigo-200 mb-1">Severity Found</div>
-                    <div className="flex justify-center gap-1">
-                      <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">2 CRIT</span>
-                      <span className="bg-orange-400 text-white text-xs px-1.5 py-0.5 rounded">5 HIGH</span>
+                  <div className="bg-indigo-600 rounded-xl p-3">
+                    <div className="text-xs text-indigo-200 mb-2 font-medium">Findings</div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-red-300">Critical</span>
+                        <span className="text-white font-bold">2</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-orange-300">High</span>
+                        <span className="text-white font-bold">5</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-yellow-300">Medium</span>
+                        <span className="text-white font-bold">4</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-300">Low</span>
+                        <span className="text-white font-bold">3</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -189,20 +221,58 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
+      {/* Scan Coverage — NEW SECTION */}
+      <section className="py-16 px-6 bg-white border-b border-slate-100">
+        <div className="max-w-5xl mx-auto">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}
+            className="text-center mb-10"
+          >
+            <motion.p variants={fadeUp} className="text-indigo-600 font-semibold text-sm uppercase tracking-wider mb-2">
+              Scan Coverage
+            </motion.p>
+            <motion.h2 variants={fadeUp} className="text-3xl font-display font-bold text-slate-900">
+              5 AWS Services Scanned Automatically
+            </motion.h2>
+          </motion.div>
+
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}
+            className="grid grid-cols-2 md:grid-cols-5 gap-4"
+          >
+            {[
+              { icon: Lock,    label: "Security Groups", checks: "Open ports, public access, IPv6 exposure",      bg: "bg-indigo-50 border-indigo-100", iconColor: "text-indigo-600" },
+              { icon: Network, label: "Subnets",         checks: "Public IP auto-assign, missing name tags",      bg: "bg-blue-50 border-blue-100",     iconColor: "text-blue-600"   },
+              { icon: Router,  label: "Route Tables",    checks: "Internet gateway exposure, blackhole routes",   bg: "bg-violet-50 border-violet-100", iconColor: "text-violet-600" },
+              { icon: Globe,   label: "VPC",             checks: "Default VPC usage, flow logs, DNS config",      bg: "bg-cyan-50 border-cyan-100",     iconColor: "text-cyan-600"   },
+              { icon: Server,  label: "EC2",             checks: "Public IPs, IMDSv2, unencrypted EBS",           bg: "bg-teal-50 border-teal-100",     iconColor: "text-teal-600"   },
+            ].map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <motion.div key={i} variants={fadeUp}
+                  className={`rounded-2xl border p-5 text-center ${item.bg}`}
+                >
+                  <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center mx-auto mb-3 border border-white">
+                    <Icon className={`h-6 w-6 ${item.iconColor}`} />
+                  </div>
+                  <h3 className="font-bold text-slate-900 text-sm mb-1">{item.label}</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">{item.checks}</p>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </section>
+
       {/* Stats */}
       <section id="stats" className="py-16 bg-indigo-600">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={stagger}
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}
             className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center"
           >
             {[
-              { value: 80, suffix: "%", label: "of cloud breaches caused by misconfigurations" },
-              { value: 445, suffix: "M+", label: "average cost of a cloud data breach" },
-              { value: 2, suffix: " min", label: "from detection to open GitHub PR" },
+              { value: 80,  suffix: "%",   label: "of cloud breaches caused by misconfigurations" },
+              { value: 445, suffix: "M+",  label: "average cost of a cloud data breach" },
+              { value: 2,   suffix: " min", label: "from detection to open GitHub PR"              },
             ].map((stat, i) => (
               <motion.div key={i} variants={fadeUp}>
                 <div className="text-5xl font-display font-extrabold text-white mb-2">
@@ -242,28 +312,28 @@ export default function LandingPage() {
                 icon: <Cloud className="h-7 w-7 text-indigo-600" />,
                 step: "01",
                 title: "Scan AWS",
-                desc: "Connects to your AWS account and scans S3, IAM, EC2, RDS, VPC, and CloudTrail for misconfigurations.",
+                desc: "Scans Security Groups, Subnets, Route Tables, VPC, and EC2 for misconfigurations using boto3 and Checkov policy engine.",
                 color: "bg-indigo-50 border-indigo-100",
               },
               {
                 icon: <Zap className="h-7 w-7 text-purple-600" />,
                 step: "02",
                 title: "AI Analysis",
-                desc: "Google Gemini LLM analyzes each issue, explains the risk in plain English, and maps it to compliance standards.",
+                desc: "Google Gemini 2.0 Flash analyzes each issue, explains the risk in plain English, and maps it to compliance standards.",
                 color: "bg-purple-50 border-purple-100",
               },
               {
                 icon: <Code2 className="h-7 w-7 text-cyan-600" />,
                 step: "03",
                 title: "Generate Fix",
-                desc: "Automatically generates a production-ready Terraform patch with inline comments for every issue found.",
+                desc: "Automatically generates a production-ready Terraform patch with inline comments for every misconfiguration found.",
                 color: "bg-cyan-50 border-cyan-100",
               },
               {
                 icon: <GitPullRequest className="h-7 w-7 text-green-600" />,
                 step: "04",
                 title: "Open PR",
-                desc: "Opens a labeled GitHub Pull Request with severity tags. Your team just reviews and merges.",
+                desc: "Opens a labeled GitHub Pull Request with severity tags. Your team just reviews and merges to apply the fix.",
                 color: "bg-green-50 border-green-100",
               },
             ].map((item, i) => (
@@ -304,12 +374,12 @@ export default function LandingPage() {
             className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
             {[
-              { icon: <Shield className="h-6 w-6 text-indigo-600" />, title: "Multi-Service Scanning", desc: "Covers S3, IAM, EC2, RDS, VPC, CloudTrail and more across all AWS regions." },
-              { icon: <Zap className="h-6 w-6 text-purple-600" />, title: "Gemini AI Analysis", desc: "Each finding is analyzed by Google Gemini with risk scoring, plain English explanations, and compliance mapping." },
-              { icon: <Code2 className="h-6 w-6 text-cyan-600" />, title: "Terraform Patches", desc: "Production-ready infrastructure code generated automatically with inline security comments." },
-              { icon: <GitPullRequest className="h-6 w-6 text-green-600" />, title: "Auto GitHub PRs", desc: "Labeled pull requests opened automatically with full context, severity tags, and fix descriptions." },
-              { icon: <BarChart3 className="h-6 w-6 text-orange-600" />, title: "Security Scoring", desc: "Real-time security score tracked over time with historical trend charts and improvement metrics." },
-              { icon: <Lock className="h-6 w-6 text-red-600" />, title: "Compliance Mapping", desc: "Every finding mapped to CIS, NIST, SOC2, and ISO27001 compliance frameworks automatically." },
+              { icon: <Shield className="h-6 w-6 text-indigo-600" />,      title: "5-Service AWS Scanning",   desc: "Covers Security Groups, Subnets, Route Tables, VPC, and EC2 — the most misconfigured AWS services." },
+              { icon: <Zap className="h-6 w-6 text-purple-600" />,         title: "Gemini AI Analysis",       desc: "Each finding analyzed by Google Gemini 2.0 Flash with risk scoring, plain English explanations, and compliance mapping." },
+              { icon: <Code2 className="h-6 w-6 text-cyan-600" />,         title: "Terraform Patches",        desc: "Production-ready infrastructure code generated automatically with inline security comments." },
+              { icon: <GitPullRequest className="h-6 w-6 text-green-600" />,title: "Auto GitHub PRs",         desc: "Labeled pull requests opened automatically with full context, severity tags, and fix descriptions." },
+              { icon: <BarChart3 className="h-6 w-6 text-orange-600" />,   title: "Security Scoring",         desc: "Real-time security score tracked over time with historical trend charts and improvement metrics." },
+              { icon: <Lock className="h-6 w-6 text-red-600" />,           title: "Compliance Mapping",       desc: "Every finding mapped to CIS, NIST, SOC2, and ISO27001 compliance frameworks automatically." },
             ].map((f, i) => (
               <motion.div key={i} variants={fadeUp}
                 className="card-hover bg-white rounded-2xl p-6 border border-slate-100 shadow-card"
@@ -338,7 +408,7 @@ export default function LandingPage() {
               Ready to Secure Your Cloud?
             </motion.h2>
             <motion.p variants={fadeUp} className="text-slate-500 text-lg mb-8">
-              Join and start fixing misconfigurations automatically today.
+              Start fixing AWS misconfigurations automatically today.
             </motion.p>
             <motion.div variants={fadeUp} className="flex gap-4 justify-center">
               <Link href="/register">
