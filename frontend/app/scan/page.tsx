@@ -121,7 +121,7 @@ export default function ScanPage() {
       setScanningCategory(cat);
       // If message suggests completion of a category
       if (msg.toLowerCase().includes("found") || msg.toLowerCase().includes("check") || msg.toLowerCase().includes("scan")) {
-        setScannedCategories(prev => new Set([...prev, cat]));
+        setScannedCategories(prev => { const next = new Set(prev); next.add(cat); return next; });
         setScanningCategory(null);
         // Try to parse finding count from log e.g. "Found 3 issues in EC2"
         const match = msg.match(/(\d+)\s*(issue|finding|misconfig)/i);
@@ -224,7 +224,7 @@ export default function ScanPage() {
     };
 
     ws.onclose = () => {
-      if (scanning) setScanning(false);
+      setScanning(false);
     };
   };
 
