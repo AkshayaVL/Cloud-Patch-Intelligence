@@ -40,6 +40,7 @@ import {
   AreaChart,
 } from "recharts";
 
+export const dynamic = 'force-dynamic';
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
@@ -48,8 +49,6 @@ const stagger: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.1 } },
 };
-
-const [comparison, setComparison] = useState<any>(null);
 
 function AnimatedNumber({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
@@ -198,6 +197,7 @@ const CATEGORY_META = [
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
+  const [comparison, setComparison] = useState<any>(null);
   const router = useRouter();
   const [score, setScore] = useState<number>(100);
   const [scoreHistory, setScoreHistory] = useState<any[]>([]);
@@ -995,3 +995,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
