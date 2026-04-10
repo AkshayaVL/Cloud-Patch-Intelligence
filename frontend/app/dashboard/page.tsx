@@ -38,9 +38,12 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
@@ -205,6 +208,7 @@ export default function DashboardPage() {
   const [prs, setPRs] = useState<any[]>([]);
   const [findings, setFindings] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [severityTrend, setSeverityTrend] = useState<any[]>([]);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -244,6 +248,21 @@ export default function DashboardPage() {
           }))
       );
       setScans(scansRes.data.slice(0, 5));
+      setSeverityTrend(
+        scansRes.data
+          .slice(0, 10)
+          .reverse()
+          .map((s: any) => ({
+            date: new Date(s.started_at).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+            }),
+            Critical: s.critical_count ?? 0,
+            High: s.high_count ?? 0,
+            Medium: s.medium_count ?? 0,
+            Low: s.low_count ?? 0,
+          }))
+      );
       setPRs(prsRes.data.slice(0, 5));
       setFindings(findingsRes.data);
     } catch (err) {
@@ -622,6 +641,87 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
+        {/* Severity Trend Chart */}
+        {severityTrend.length > 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 mb-6"
+          >
+            <div className="flex items-center gap-2 mb-5">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <h2 className="font-display font-bold text-slate-900">
+                Severity Trend
+              </h2>
+              <span className="ml-auto text-xs text-slate-400">
+                Findings per scan over time
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={severityTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#fff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "12px",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                  }}
+                  labelStyle={{ color: "#64748b", fontSize: 12 }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: "12px", paddingTop: "16px" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Critical"
+                  stroke="#ef4444"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#ef4444", r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="High"
+                  stroke="#f97316"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Medium"
+                  stroke="#eab308"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#eab308", r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Low"
+                  stroke="#94a3b8"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#94a3b8", r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </motion.div>
+        )}
+
         {/* Scan Comparison */}
         {comparison?.enough_data && (
           <motion.div
@@ -995,4 +1095,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
