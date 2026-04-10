@@ -480,7 +480,7 @@ export default function DashboardPage() {
           ))}
         </motion.div>
 
-        {/* Category Breakdown + Latest Scan Severity */}
+        {/* Category Breakdown + Latest Scan Severity + Fix Rate */}
         {!dataLoading && findings.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -541,7 +541,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Latest Scan Severity Summary */}
-            {latestScan && (
+            {latestScan ? (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6">
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-2">
@@ -585,89 +585,108 @@ export default function DashboardPage() {
                   {getStatusBadge(latestScan.status)}
                 </div>
               </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6 flex items-center justify-center">
+                <p className="text-slate-400 text-sm">No scans yet</p>
+              </div>
             )}
+
+            {/* Fix Rate */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <h2 className="font-display font-bold text-slate-900">
+                  Fix Rate
+                </h2>
+              </div>
+
+              {prs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                    <GitPullRequest className="h-6 w-6 text-slate-400" />
+                  </div>
+                  <p className="text-slate-500 text-sm">
+                    No PRs yet —<br />
+                    run a scan first.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Score ring style display */}
+                  <div className="flex flex-col items-center justify-center py-3 mb-4">
+                    <div
+                      className={`text-5xl font-display font-extrabold mb-1 ${
+                        fixRate >= 70
+                          ? "text-green-600"
+                          : fixRate >= 40
+                          ? "text-yellow-600"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {fixRate}%
+                    </div>
+                    <div className="text-xs text-slate-500">of PRs merged</div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 rounded-full h-2 mb-5">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${fixRate}%` }}
+                      transition={{ duration: 1, delay: 0.3 }}
+                      className={`h-2 rounded-full ${
+                        fixRate >= 70
+                          ? "bg-green-500"
+                          : fixRate >= 40
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Counts */}
+                  <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                    {[
+                      {
+                        label: "Merged",
+                        value: fixedCount,
+                        dot: "bg-green-500",
+                        text: "text-green-600",
+                      },
+                      {
+                        label: "Open",
+                        value: prs.filter((p) => p.status === "open").length,
+                        dot: "bg-blue-500",
+                        text: "text-blue-600",
+                      },
+                      {
+                        label: "Total",
+                        value: prs.length,
+                        dot: "bg-slate-400",
+                        text: "text-slate-700",
+                      },
+                    ].map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-slate-500 flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${row.dot} inline-block`}
+                          />
+                          {row.label}
+                        </span>
+                        <span className={`font-bold ${row.text}`}>
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </motion.div>
         )}
-
-        {/* Fix Rate Metric */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            <h2 className="font-display font-bold text-slate-900">Fix Rate</h2>
-          </div>
-
-          {prs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-                <GitPullRequest className="h-6 w-6 text-slate-400" />
-              </div>
-              <p className="text-slate-500 text-sm">
-                No PRs yet — run a scan first.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Big % number */}
-              <div className="text-center mb-5">
-                <div
-                  className={`text-5xl font-display font-extrabold mb-1 ${
-                    fixRate >= 70
-                      ? "text-green-600"
-                      : fixRate >= 40
-                      ? "text-yellow-600"
-                      : "text-red-500"
-                  }`}
-                >
-                  {fixRate}%
-                </div>
-                <div className="text-xs text-slate-500">of findings fixed</div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${fixRate}%` }}
-                  transition={{ duration: 1, delay: 0.3 }}
-                  className={`h-2.5 rounded-full ${
-                    fixRate >= 70
-                      ? "bg-green-500"
-                      : fixRate >= 40
-                      ? "bg-yellow-500"
-                      : "bg-red-500"
-                  }`}
-                />
-              </div>
-
-              {/* Counts */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                    Merged (Fixed)
-                  </span>
-                  <span className="font-bold text-green-600">{fixedCount}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-                    Open (Pending)
-                  </span>
-                  <span className="font-bold text-blue-600">
-                    {prs.filter((p) => p.status === "open").length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
-                    Total PRs
-                  </span>
-                  <span className="font-bold text-slate-700">{prs.length}</span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
 
         {/* Score History Chart */}
         {scoreHistory.length > 1 && (
