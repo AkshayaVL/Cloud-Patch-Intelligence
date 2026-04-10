@@ -313,7 +313,13 @@ export default function DashboardPage() {
         },
       ]
     : [];
-
+  const fixRate =
+    prs.length > 0
+      ? Math.round(
+          (prs.filter((p) => p.status === "merged").length / prs.length) * 100
+        )
+      : 0;
+  const fixedCount = prs.filter((p) => p.status === "merged").length;
   const getScoreLabel = (s: number) =>
     s >= 80 ? "Good" : s >= 50 ? "Fair" : "Poor";
   const getScoreColor = (s: number) =>
@@ -480,7 +486,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6"
+            className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6"
           >
             {/* Category Breakdown */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6">
@@ -582,6 +588,86 @@ export default function DashboardPage() {
             )}
           </motion.div>
         )}
+
+        {/* Fix Rate Metric */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            <h2 className="font-display font-bold text-slate-900">Fix Rate</h2>
+          </div>
+
+          {prs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                <GitPullRequest className="h-6 w-6 text-slate-400" />
+              </div>
+              <p className="text-slate-500 text-sm">
+                No PRs yet — run a scan first.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Big % number */}
+              <div className="text-center mb-5">
+                <div
+                  className={`text-5xl font-display font-extrabold mb-1 ${
+                    fixRate >= 70
+                      ? "text-green-600"
+                      : fixRate >= 40
+                      ? "text-yellow-600"
+                      : "text-red-500"
+                  }`}
+                >
+                  {fixRate}%
+                </div>
+                <div className="text-xs text-slate-500">of findings fixed</div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${fixRate}%` }}
+                  transition={{ duration: 1, delay: 0.3 }}
+                  className={`h-2.5 rounded-full ${
+                    fixRate >= 70
+                      ? "bg-green-500"
+                      : fixRate >= 40
+                      ? "bg-yellow-500"
+                      : "bg-red-500"
+                  }`}
+                />
+              </div>
+
+              {/* Counts */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                    Merged (Fixed)
+                  </span>
+                  <span className="font-bold text-green-600">{fixedCount}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                    Open (Pending)
+                  </span>
+                  <span className="font-bold text-blue-600">
+                    {prs.filter((p) => p.status === "open").length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                    Total PRs
+                  </span>
+                  <span className="font-bold text-slate-700">{prs.length}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Score History Chart */}
         {scoreHistory.length > 1 && (
