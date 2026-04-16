@@ -65,6 +65,7 @@ class AgentOrchestrator:
             self._emit("scanning", "Scanning AWS resources...")
             scan_results = self.scanner.run_full_scan()
             findings = scan_results["findings"]
+            findings = findings[:5]  # Demo: cap to 5 findings for speed
             counts = scan_results["severity_counts"]
             self._emit("scanning", f"Found {len(findings)} misconfigurations", {"total": len(findings), "counts": counts})
 

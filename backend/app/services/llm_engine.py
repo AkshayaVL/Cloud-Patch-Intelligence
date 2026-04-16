@@ -39,7 +39,10 @@ Return ONLY a valid JSON object with these exact fields:
 Return only the JSON, no other text.
 """
         try:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(
+    prompt,
+    request_options={"timeout": 30}  # 30 second timeout
+)
             cleaned = self._clean_json(response.text)
             return json.loads(cleaned)
         except Exception as e:
@@ -76,7 +79,10 @@ resource "aws_..." "..." {{
 }}
 """
         try:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(
+    prompt,
+    request_options={"timeout": 30}  # 30 second timeout
+)
             cleaned = self._clean_json(response.text)
             return cleaned
         except Exception as e:
@@ -105,7 +111,10 @@ Return ONLY a valid JSON object with these fields:
 Return only the JSON, no other text.
 """
         try:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(
+    prompt,
+    request_options={"timeout": 30}  # 30 second timeout
+)
             cleaned = self._clean_json(response.text)
             return json.loads(cleaned)
         except Exception as e:
