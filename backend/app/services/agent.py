@@ -15,22 +15,22 @@ class AgentOrchestrator:
         github_token: str,
         github_repo: str,
         user_id: str,
-        progress_callback: Callable = None
+        progress_callback: Callable = None,
     ):
         self.scanner = AWSScanner(aws_access_key_id, aws_secret_access_key, aws_region)
         self.llm = LLMEngine()
         self.github = GitHubPRCreator(github_token, github_repo)
         self.user_id = user_id
-        self.supabase = create_client(settings.supabase_url, settings.supabase_service_role_key)
+        self.supabase = create_client(
+            settings.supabase_url, settings.supabase_service_role_key
+        )
         self.progress_callback = progress_callback
 
     def _emit(self, step: str, message: str, data: dict = None):
         if self.progress_callback:
-            self.progress_callback({
-                "step": step,
-                "message": message,
-                "data": data or {}
-            })
+            self.progress_callback(
+                {"step": step, "message": message, "data": data or {}}
+            )
         print(f"[Agent] {step}: {message}")
 
     def _calculate_score(self, severity_counts: dict) -> int:
@@ -38,10 +38,10 @@ class AgentOrchestrator:
         if total == 0:
             return 100
         penalty = (
-            severity_counts.get("CRITICAL", 0) * 20 +
-            severity_counts.get("HIGH", 0) * 10 +
-            severity_counts.get("MEDIUM", 0) * 5 +
-            severity_counts.get("LOW", 0) * 2
+            severity_counts.get("CRITICAL", 0) * 20
+            + severity_counts.get("HIGH", 0) * 10
+            + severity_counts.get("MEDIUM", 0) * 5
+            + severity_counts.get("LOW", 0) * 2
         )
         score = max(0, 100 - penalty)
         return score
@@ -50,26 +50,30 @@ class AgentOrchestrator:
         """
         Check if an open PR already exists for this user
         with the same check_id + resource_id combination.
-        Returns True if a duplicate open PR exists.
+        Returns True only if a PR exists and is still open.
         """
-        result = self.supabase.table("pull_requests") \
-            .select("id") \
-            .eq("user_id", self.user_id) \
-            .eq("status", "open") \
+        result = (
+            self.supabase.table("findings")
+            .select("id, pr_status")
+            .eq("user_id", self.user_id)
+            .eq("check_id", check_id)
+            .eq("resource_id", resource_id)
+            .eq("pr_status", "opened")
             .execute()
+        )
 
         if not result.data:
             return False
 
-        # Cross-check against findings table for check_id + resource_id
-        for pr in result.data:
-            finding = self.supabase.table("findings") \
-                .select("id") \
-                .eq("id", pr.get("finding_id")) \
-                .eq("check_id", check_id) \
-                .eq("resource_id", resource_id) \
+        for finding in result.data:
+            pr = (
+                self.supabase.table("pull_requests")
+                .select("id")
+                .eq("finding_id", finding["id"])
+                .eq("status", "open")
                 .execute()
-            if finding.data:
+            )
+            if pr.data:
                 return True
 
         return False
@@ -80,7 +84,7 @@ class AgentOrchestrator:
             "findings_processed": 0,
             "prs_opened": 0,
             "prs_skipped": 0,
-            "errors": []
+            "errors": [],
         }
 
         try:
@@ -94,18 +98,35 @@ class AgentOrchestrator:
             self._emit("scanning", "Scanning AWS resources...")
             scan_results = self.scanner.run_full_scan()
             findings = scan_results["findings"]
-            findings = findings[:5]  # Demo: cap to 5 findings for speed
+
+            # Deduplicate by check_id + resource_id, keep first occurrence
+            seen = set()
+            unique_findings = []
+            for f in findings:
+                key = f"{f['check_id']}::{f['resource_id']}"
+                if key not in seen:
+                    seen.add(key)
+                    unique_findings.append(f)
+
+            findings = unique_findings[:5]  # Cap after deduplication
+
             counts = scan_results["severity_counts"]
-            self._emit("scanning", f"Found {len(findings)} misconfigurations", {"total": len(findings), "counts": counts})
+            self._emit(
+                "scanning",
+                f"Found {len(findings)} misconfigurations",
+                {"total": len(findings), "counts": counts},
+            )
 
             # Update scan record
-            self.supabase.table("scans").update({
-                "total_issues": scan_results["total"],
-                "critical_count": counts["CRITICAL"],
-                "high_count": counts["HIGH"],
-                "medium_count": counts["MEDIUM"],
-                "low_count": counts["LOW"],
-            }).eq("id", scan_id).execute()
+            self.supabase.table("scans").update(
+                {
+                    "total_issues": scan_results["total"],
+                    "critical_count": counts["CRITICAL"],
+                    "high_count": counts["HIGH"],
+                    "medium_count": counts["MEDIUM"],
+                    "low_count": counts["LOW"],
+                }
+            ).eq("id", scan_id).execute()
 
             # ── STEP 3-5: Process each finding ───────────
             for i, finding in enumerate(findings):
@@ -113,7 +134,7 @@ class AgentOrchestrator:
                     self._emit(
                         "analyzing",
                         f"Analyzing finding {i+1}/{len(findings)}: {finding['check_title']}",
-                        {"current": i+1, "total": len(findings)}
+                        {"current": i + 1, "total": len(findings)},
                     )
 
                     # ── DEDUPLICATION CHECK ───────────────
@@ -121,31 +142,38 @@ class AgentOrchestrator:
                     if self._has_open_pr(finding["check_id"], finding["resource_id"]):
                         self._emit(
                             "skipped",
-                            f"Skipping {finding['check_id']} on {finding['resource_id']} — open PR already exists"
+                            f"Skipping {finding['check_id']} on {finding['resource_id']} — open PR already exists",
                         )
                         results["prs_skipped"] += 1
                         results["findings_processed"] += 1
 
                         # Still save the finding record linked to this scan
                         # but mark pr_status as 'duplicate' so it's traceable
-                        self.supabase.table("findings").insert({
-                            "scan_id": scan_id,
-                            "user_id": self.user_id,
-                            "resource_id": finding["resource_id"],
-                            "resource_type": finding["resource_type"],
-                            "check_id": finding["check_id"],
-                            "check_title": finding["check_title"],
-                            "severity": finding.get("severity", "MEDIUM"),
-                            "pr_status": "duplicate"
-                        }).execute()
+                        self.supabase.table("findings").insert(
+                            {
+                                "scan_id": scan_id,
+                                "user_id": self.user_id,
+                                "resource_id": finding["resource_id"],
+                                "resource_type": finding["resource_type"],
+                                "check_id": finding["check_id"],
+                                "check_title": finding["check_title"],
+                                "severity": finding.get("severity", "MEDIUM"),
+                                "pr_status": "duplicate",
+                            }
+                        ).execute()
                         continue
 
                     # STEP 3: LLM Analysis
                     analysis = self.llm.analyze_finding(finding)
 
                     # STEP 4: Generate Terraform Patch
-                    self._emit("patching", f"Generating Terraform fix for {finding['resource_id']}")
-                    terraform_patch = self.llm.generate_terraform_patch(finding, analysis)
+                    self._emit(
+                        "patching",
+                        f"Generating Terraform fix for {finding['resource_id']}",
+                    )
+                    terraform_patch = self.llm.generate_terraform_patch(
+                        finding, analysis
+                    )
 
                     # STEP 5: Generate PR content
                     pr_content = self.llm.generate_pr_description(finding, analysis)
@@ -153,58 +181,78 @@ class AgentOrchestrator:
                     pr_body = pr_content.get("body", "")
 
                     # Save finding to DB
-                    saved = self.supabase.table("findings").insert({
-                        "scan_id": scan_id,
-                        "user_id": self.user_id,
-                        "resource_id": finding["resource_id"],
-                        "resource_type": finding["resource_type"],
-                        "check_id": finding["check_id"],
-                        "check_title": finding["check_title"],
-                        "severity": finding.get("severity", analysis.get("severity", "MEDIUM")),
-                        "explanation": analysis.get("explanation"),
-                        "risk_description": analysis.get("risk_description"),
-                        "compliance_references": analysis.get("compliance_references"),
-                        "terraform_patch": terraform_patch,
-                        "pr_status": "pending"
-                    }).execute()
+                    saved = (
+                        self.supabase.table("findings")
+                        .insert(
+                            {
+                                "scan_id": scan_id,
+                                "user_id": self.user_id,
+                                "resource_id": finding["resource_id"],
+                                "resource_type": finding["resource_type"],
+                                "check_id": finding["check_id"],
+                                "check_title": finding["check_title"],
+                                "severity": finding.get(
+                                    "severity", analysis.get("severity", "MEDIUM")
+                                ),
+                                "explanation": analysis.get("explanation"),
+                                "risk_description": analysis.get("risk_description"),
+                                "compliance_references": analysis.get(
+                                    "compliance_references"
+                                ),
+                                "terraform_patch": terraform_patch,
+                                "pr_status": "pending",
+                            }
+                        )
+                        .execute()
+                    )
 
                     finding_id = saved.data[0]["id"]
 
                     # STEP 6: Open GitHub PR
-                    self._emit("pr_creation", f"Opening GitHub PR for {finding['resource_id']}")
+                    self._emit(
+                        "pr_creation", f"Opening GitHub PR for {finding['resource_id']}"
+                    )
                     pr_result = self.github.create_pr(
                         finding=finding,
                         terraform_patch=terraform_patch,
                         pr_title=pr_title,
-                        pr_body=pr_body
+                        pr_body=pr_body,
                     )
 
                     # Update finding with PR info
-                    self.supabase.table("findings").update({
-                        "pr_url": pr_result["pr_url"],
-                        "pr_number": pr_result["pr_number"],
-                        "pr_status": "opened"
-                    }).eq("id", finding_id).execute()
+                    self.supabase.table("findings").update(
+                        {
+                            "pr_url": pr_result["pr_url"],
+                            "pr_number": pr_result["pr_number"],
+                            "pr_status": "opened",
+                        }
+                    ).eq("id", finding_id).execute()
 
                     # Save PR record
-                    self.supabase.table("pull_requests").insert({
-                        "user_id": self.user_id,
-                        "finding_id": finding_id,
-                        "scan_id": scan_id,
-                        "pr_number": pr_result["pr_number"],
-                        "pr_url": pr_result["pr_url"],
-                        "pr_title": pr_title,
-                        "branch_name": pr_result["branch_name"],
-                        "severity": finding.get("severity", "MEDIUM"),
-                        "status": "open"
-                    }).execute()
+                    self.supabase.table("pull_requests").insert(
+                        {
+                            "user_id": self.user_id,
+                            "finding_id": finding_id,
+                            "scan_id": scan_id,
+                            "pr_number": pr_result["pr_number"],
+                            "pr_url": pr_result["pr_url"],
+                            "pr_title": pr_title,
+                            "branch_name": pr_result["branch_name"],
+                            "severity": finding.get("severity", "MEDIUM"),
+                            "status": "open",
+                        }
+                    ).execute()
 
                     results["prs_opened"] += 1
                     results["findings_processed"] += 1
-                    self._emit("pr_creation", f"PR opened: {pr_result['pr_url']}", pr_result)
+                    self._emit(
+                        "pr_creation", f"PR opened: {pr_result['pr_url']}", pr_result
+                    )
 
                 except Exception as e:
-                    error_msg = f"Error processing finding {finding.get('check_id')}: {str(e)}"
+                    error_msg = (
+                        f"Error processing finding {finding.get('check_id')}: {str(e)}"
+                    )
                     print(error_msg)
                     results["errors"].append(error_msg)
                     results["findings_processed"] += 1
@@ -221,32 +269,33 @@ class AgentOrchestrator:
 
             score = self._calculate_score(actual_counts)
 
-            self.supabase.table("security_scores").insert({
-                "user_id": self.user_id,
-                "score": score,
-                "scan_id": scan_id
-            }).execute()
+            self.supabase.table("security_scores").insert(
+                {"user_id": self.user_id, "score": score, "scan_id": scan_id}
+            ).execute()
 
             # Mark scan complete
-            self.supabase.table("scans").update({
-                "status": "completed"
-            }).eq("id", scan_id).execute()
+            self.supabase.table("scans").update({"status": "completed"}).eq(
+                "id", scan_id
+            ).execute()
 
-            self._emit("completed", f"Scan complete. Score: {score}/100. PRs opened: {results['prs_opened']}. Skipped (duplicates): {results['prs_skipped']}", {
-                "security_score": score,
-                "prs_opened": results["prs_opened"],
-                "prs_skipped": results["prs_skipped"],
-                "findings_by_severity": actual_counts
-            })
+            self._emit(
+                "completed",
+                f"Scan complete. Score: {score}/100. PRs opened: {results['prs_opened']}. Skipped (duplicates): {results['prs_skipped']}",
+                {
+                    "security_score": score,
+                    "prs_opened": results["prs_opened"],
+                    "prs_skipped": results["prs_skipped"],
+                    "findings_by_severity": actual_counts,
+                },
+            )
 
             results["score"] = score
             results["severity_counts"] = actual_counts
             return results
 
         except Exception as e:
-            self.supabase.table("scans").update({
-                "status": "failed",
-                "error_message": str(e)
-            }).eq("id", scan_id).execute()
+            self.supabase.table("scans").update(
+                {"status": "failed", "error_message": str(e)}
+            ).eq("id", scan_id).execute()
             self._emit("error", str(e))
             raise
