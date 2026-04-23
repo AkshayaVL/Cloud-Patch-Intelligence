@@ -46,11 +46,40 @@ class AgentOrchestrator:
         score = max(0, 100 - penalty)
         return score
 
+    def _has_open_pr(self, check_id: str, resource_id: str) -> bool:
+        """
+        Check if an open PR already exists for this user
+        with the same check_id + resource_id combination.
+        Returns True if a duplicate open PR exists.
+        """
+        result = self.supabase.table("pull_requests") \
+            .select("id") \
+            .eq("user_id", self.user_id) \
+            .eq("status", "open") \
+            .execute()
+
+        if not result.data:
+            return False
+
+        # Cross-check against findings table for check_id + resource_id
+        for pr in result.data:
+            finding = self.supabase.table("findings") \
+                .select("id") \
+                .eq("id", pr.get("finding_id")) \
+                .eq("check_id", check_id) \
+                .eq("resource_id", resource_id) \
+                .execute()
+            if finding.data:
+                return True
+
+        return False
+
     def run(self, scan_id: str) -> dict:
         results = {
             "scan_id": scan_id,
             "findings_processed": 0,
             "prs_opened": 0,
+            "prs_skipped": 0,
             "errors": []
         }
 
@@ -86,6 +115,30 @@ class AgentOrchestrator:
                         f"Analyzing finding {i+1}/{len(findings)}: {finding['check_title']}",
                         {"current": i+1, "total": len(findings)}
                     )
+
+                    # ── DEDUPLICATION CHECK ───────────────
+                    # Skip if an open PR already exists for this check + resource
+                    if self._has_open_pr(finding["check_id"], finding["resource_id"]):
+                        self._emit(
+                            "skipped",
+                            f"Skipping {finding['check_id']} on {finding['resource_id']} — open PR already exists"
+                        )
+                        results["prs_skipped"] += 1
+                        results["findings_processed"] += 1
+
+                        # Still save the finding record linked to this scan
+                        # but mark pr_status as 'duplicate' so it's traceable
+                        self.supabase.table("findings").insert({
+                            "scan_id": scan_id,
+                            "user_id": self.user_id,
+                            "resource_id": finding["resource_id"],
+                            "resource_type": finding["resource_type"],
+                            "check_id": finding["check_id"],
+                            "check_title": finding["check_title"],
+                            "severity": finding.get("severity", "MEDIUM"),
+                            "pr_status": "duplicate"
+                        }).execute()
+                        continue
 
                     # STEP 3: LLM Analysis
                     analysis = self.llm.analyze_finding(finding)
@@ -158,14 +211,14 @@ class AgentOrchestrator:
 
             # ── STEP 6: Calculate Security Score ─────────
             self._emit("scoring", "Calculating security score...")
-            
+
             # Recalculate counts from actual processed findings
             actual_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
             for finding in findings:
                 sev = finding.get("severity", "MEDIUM").upper()
                 if sev in actual_counts:
                     actual_counts[sev] += 1
-            
+
             score = self._calculate_score(actual_counts)
 
             self.supabase.table("security_scores").insert({
@@ -179,9 +232,10 @@ class AgentOrchestrator:
                 "status": "completed"
             }).eq("id", scan_id).execute()
 
-            self._emit("completed", f"Scan complete. Score: {score}/100. PRs opened: {results['prs_opened']}", {
+            self._emit("completed", f"Scan complete. Score: {score}/100. PRs opened: {results['prs_opened']}. Skipped (duplicates): {results['prs_skipped']}", {
                 "security_score": score,
                 "prs_opened": results["prs_opened"],
+                "prs_skipped": results["prs_skipped"],
                 "findings_by_severity": actual_counts
             })
 
