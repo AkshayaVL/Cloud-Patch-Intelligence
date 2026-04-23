@@ -1,20 +1,30 @@
-import google.generativeai as genai
+from groq import Groq
 import json
 import re
 from app.config import settings
 
-genai.configure(api_key=settings.gemini_api_key)
+client = Groq(api_key=settings.groq_api_key)
+MODEL = "llama-3.3-70b-versatile"
 
 
 class LLMEngine:
     def __init__(self):
-        self.model = genai.GenerativeModel("gemini-2.5-flash")
+        self.client = client
+        self.model = MODEL
 
     def _clean_json(self, text: str) -> str:
-        # Remove markdown code blocks if present
         text = re.sub(r"```json\s*", "", text)
         text = re.sub(r"```\s*", "", text)
         return text.strip()
+
+    def _chat(self, prompt: str) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content
 
     # ─── Analyze a misconfiguration ─────────────────────
     def analyze_finding(self, finding: dict) -> dict:
@@ -39,11 +49,8 @@ Return ONLY a valid JSON object with these exact fields:
 Return only the JSON, no other text.
 """
         try:
-            response = self.model.generate_content(
-    prompt,
-    request_options={"timeout": 30}  # 30 second timeout
-)
-            cleaned = self._clean_json(response.text)
+            raw = self._chat(prompt)
+            cleaned = self._clean_json(raw)
             return json.loads(cleaned)
         except Exception as e:
             print(f"LLM analyze error: {e}")
@@ -79,12 +86,8 @@ resource "aws_..." "..." {{
 }}
 """
         try:
-            response = self.model.generate_content(
-    prompt,
-    request_options={"timeout": 30}  # 30 second timeout
-)
-            cleaned = self._clean_json(response.text)
-            return cleaned
+            raw = self._chat(prompt)
+            return self._clean_json(raw)
         except Exception as e:
             print(f"LLM patch error: {e}")
             return f"# Terraform patch generation failed for {finding.get('resource_id')}\n# Error: {str(e)}"
@@ -111,11 +114,8 @@ Return ONLY a valid JSON object with these fields:
 Return only the JSON, no other text.
 """
         try:
-            response = self.model.generate_content(
-    prompt,
-    request_options={"timeout": 30}  # 30 second timeout
-)
-            cleaned = self._clean_json(response.text)
+            raw = self._chat(prompt)
+            cleaned = self._clean_json(raw)
             return json.loads(cleaned)
         except Exception as e:
             print(f"LLM PR description error: {e}")

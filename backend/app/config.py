@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     supabase_anon_key: str
     supabase_service_role_key: str
 
-    # Gemini
-    gemini_api_key: str
+    # Groq
+    groq_api_key: str
 
     # JWT
     jwt_secret_key: str

@@ -9,7 +9,7 @@ boto3
 checkov
 langchain
 langchain-google-genai
-google-generativeai
+groq
 PyGithub==2.3.0
 supabase==2.4.3
 websockets==12.0
