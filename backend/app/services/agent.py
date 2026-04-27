@@ -108,7 +108,7 @@ class AgentOrchestrator:
                     seen.add(key)
                     unique_findings.append(f)
 
-            findings = unique_findings[:5]  # Cap after deduplication
+            findings = unique_findings[:10]  # Cap after deduplication
 
             counts = scan_results["severity_counts"]
             self._emit(
